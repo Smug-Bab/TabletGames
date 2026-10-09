@@ -1,9 +1,6 @@
 using UnityEngine;
-using System.Collections.Generic;
-
+using UnityEngine.Input
 public class carmovement : MonoBehaviour
 {
-public GameObject body;
-public List<GameObject> wheels;
 
 }

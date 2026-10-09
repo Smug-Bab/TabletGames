@@ -9,6 +9,16 @@
     "/home/smugbab/Unity/Hub/Editor/6000.5.3f1/Editor/Data/Resources/PackageManager/BuiltInPackages/BuiltInPackagesCombined.sha1"
   ],
   "outputs": {
+    "com.unity.inputsystem@1.19.0": {
+      "name": "com.unity.inputsystem",
+      "displayName": "Input System",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.inputsystem@21a28c3a6c83",
+      "fingerprint": "21a28c3a6c83903a93cf15d7d0714b773c50fdf6",
+      "editorCompatibility": "2022.3.0a1",
+      "version": "1.19.0",
+      "source": "registry",
+      "testable": false
+    },
     "com.unity.multiplayer.center@1.0.1": {
       "name": "com.unity.multiplayer.center",
       "displayName": "Multiplayer Center",
@@ -16,6 +26,16 @@
       "fingerprint": "095ed72d092771585787cda2480e3e23826224ba",
       "editorCompatibility": "6000.0.0a1",
       "version": "1.0.1",
+      "source": "builtin",
+      "testable": false
+    },
+    "com.unity.render-pipelines.universal@17.5.0": {
+      "name": "com.unity.render-pipelines.universal",
+      "displayName": "Universal Render Pipeline",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.render-pipelines.universal@d32c6e899367",
+      "fingerprint": "d32c6e8993677e8515d50aa95b80ee3775fd4b29",
+      "editorCompatibility": "6000.5.0a1",
+      "version": "17.5.0",
       "source": "builtin",
       "testable": false
     },
@@ -304,6 +324,116 @@
       "displayName": "Hierarchy Core",
       "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.modules.hierarchycore",
       "version": "1.0.0",
+      "source": "builtin",
+      "testable": false
+    },
+    "com.unity.render-pipelines.core@17.5.0": {
+      "name": "com.unity.render-pipelines.core",
+      "displayName": "Scriptable Render Pipeline Core",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.render-pipelines.core@6975b73b1fe9",
+      "fingerprint": "6975b73b1fe990f57d344ff1394681014012c399",
+      "editorCompatibility": "6000.5.0a1",
+      "version": "17.5.0",
+      "source": "builtin",
+      "testable": false
+    },
+    "com.unity.shadergraph@17.5.0": {
+      "name": "com.unity.shadergraph",
+      "displayName": "Shader Graph",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.shadergraph@61c75dca5948",
+      "fingerprint": "61c75dca59480ed0c5fe425a784a175f60694fb8",
+      "editorCompatibility": "6000.5.0a1",
+      "version": "17.5.0",
+      "source": "builtin",
+      "testable": false
+    },
+    "com.unity.render-pipelines.universal-config@17.5.0": {
+      "name": "com.unity.render-pipelines.universal-config",
+      "displayName": "Universal Render Pipeline Config",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.render-pipelines.universal-config@47de94ac0cce",
+      "fingerprint": "47de94ac0cce18abcb764d28a4ab2e477c4de615",
+      "editorCompatibility": "6000.5.0a1",
+      "version": "17.5.0",
+      "source": "builtin",
+      "testable": false
+    },
+    "com.unity.searcher@4.9.4": {
+      "name": "com.unity.searcher",
+      "displayName": "Searcher",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.searcher@d45a78918735",
+      "fingerprint": "d45a78918735dd5b1de2247c6e3567c60aa24115",
+      "editorCompatibility": "2019.1.0a1",
+      "version": "4.9.4",
+      "source": "registry",
+      "testable": false
+    },
+    "com.unity.burst@1.8.29": {
+      "name": "com.unity.burst",
+      "displayName": "Burst",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.burst@6bb9aca3ef38",
+      "fingerprint": "6bb9aca3ef382e98bd0c1e4ab5fc74380c16095f",
+      "editorCompatibility": "2022.3.0a1",
+      "version": "1.8.29",
+      "source": "registry",
+      "testable": false
+    },
+    "com.unity.collections@6.5.0": {
+      "name": "com.unity.collections",
+      "displayName": "Collections",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.collections@91fb845e8cf9",
+      "fingerprint": "91fb845e8cf9f3c44b3dae82f86b0e80cdb5519d",
+      "editorCompatibility": "6000.5.0a1",
+      "version": "6.5.0",
+      "source": "builtin",
+      "testable": false
+    },
+    "com.unity.nuget.mono-cecil@1.11.6": {
+      "name": "com.unity.nuget.mono-cecil",
+      "displayName": "Mono Cecil",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.nuget.mono-cecil@ecb9724e46ff",
+      "fingerprint": "ecb9724e46fff855c46a4f37f0a3377a3cfffc06",
+      "editorCompatibility": "2019.4.0a1",
+      "version": "1.11.6",
+      "source": "registry",
+      "testable": false
+    },
+    "com.unity.test-framework@1.7.0": {
+      "name": "com.unity.test-framework",
+      "displayName": "Test Framework",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.test-framework@773a3a4953ad",
+      "fingerprint": "773a3a4953ad2fdec2162cbc24e6d5fede4277d2",
+      "editorCompatibility": "6000.0.44f1",
+      "version": "1.7.0",
+      "source": "builtin",
+      "testable": false
+    },
+    "com.unity.test-framework.performance@3.5.0": {
+      "name": "com.unity.test-framework.performance",
+      "displayName": "Performance testing API",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.test-framework.performance@8b56083ec0f0",
+      "fingerprint": "8b56083ec0f03c33121bea5c806c91b0fa2f2b69",
+      "editorCompatibility": "2020.3.0a1",
+      "version": "3.5.0",
+      "source": "registry",
+      "testable": false
+    },
+    "com.unity.mathematics@1.4.0": {
+      "name": "com.unity.mathematics",
+      "displayName": "Mathematics",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.mathematics@bdc7f308708c",
+      "fingerprint": "bdc7f308708c85f47fdf7e1d40d75e6642ab12dc",
+      "editorCompatibility": "6000.5.0a1",
+      "version": "1.4.0",
+      "source": "builtin",
+      "testable": false
+    },
+    "com.unity.ext.nunit@2.1.0": {
+      "name": "com.unity.ext.nunit",
+      "displayName": "Custom NUnit",
+      "resolvedPath": "/home/smugbab/Desktop/Projects/TabletGames/Library/PackageCache/com.unity.ext.nunit@9054f8d1d690",
+      "fingerprint": "9054f8d1d690ee4458ede74e55e4092ab85c841d",
+      "editorCompatibility": "2019.4.0a1",
+      "version": "2.1.0",
       "source": "builtin",
       "testable": false
     }
