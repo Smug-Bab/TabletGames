@@ -8,16 +8,26 @@ public class InfiniteTerrainSystem : MonoBehaviour
     public Transform player;
     public ProceduralRoadSystem roadSystem;
 
-    [Header("Grid & Terrain Settings")]
+    [Header("Material")]
+    public Material terrainMaterial;
+    public Material roadMaterial;
+    public Material townMaterial;
+
+    [Header("Chunk & Terrain")]
     public int width = 128;
     public int depth = 128;
     public float spacing = 1.2f;
     public float scale = 60f;
     public float heightMultiplier = 12f;
     public float updateThreshold = 5f;
+    public float terrainSeed = 17.43f;
+    [Range(1, 4)] public int octaves = 2;
+    [Range(0.1f, 1f)] public float persistence = 0.5f;
+    [Range(1.5f, 3f)] public float lacunarity = 2f;
 
     private MeshFilter meshFilter;
     private MeshCollider meshCollider;
+    private MeshRenderer meshRenderer;
     private Mesh mesh;
     private Vector3 lastPlayerPosition;
 
@@ -25,13 +35,24 @@ public class InfiniteTerrainSystem : MonoBehaviour
     public int Width => width;
     public int Depth => depth;
     public float Spacing => spacing;
+    public float Scale => scale;
+    public float HeightMultiplier => heightMultiplier;
 
-    void Start()
+    private void Start()
     {
+        terrainSeed = WorldNoise.RandomSeed();
+
+        if (roadSystem == null)
+        {
+            roadSystem = GetComponent<ProceduralRoadSystem>();
+        }
+
         meshFilter = GetComponent<MeshFilter>();
         meshCollider = GetComponent<MeshCollider>();
+        meshRenderer = GetComponent<MeshRenderer>();
         mesh = new Mesh();
         meshFilter.mesh = mesh;
+        ApplyMaterialOverrides();
 
         if (player == null)
         {
@@ -43,10 +64,9 @@ public class InfiniteTerrainSystem : MonoBehaviour
         lastPlayerPosition = player.position;
     }
 
-    void Update()
+    private void Update()
     {
-        if (Vector3.Distance(new Vector3(player.position.x, 0, player.position.z),
-            new Vector3(lastPlayerPosition.x, 0, lastPlayerPosition.z)) > updateThreshold)
+        if (Vector3.Distance(new Vector3(player.position.x, 0f, player.position.z), new Vector3(lastPlayerPosition.x, 0f, lastPlayerPosition.z)) > updateThreshold)
         {
             UpdateChunkPosition();
             GenerateTerrain();
@@ -54,13 +74,43 @@ public class InfiniteTerrainSystem : MonoBehaviour
         }
     }
 
-    void UpdateChunkPosition()
+    private void ApplyMaterialOverrides()
     {
-        transform.position = new Vector3(
-            Mathf.Floor(player.position.x),
-                                         0,
-                                         Mathf.Floor(player.position.z)
-        );
+        if (meshRenderer == null) return;
+
+        Material[] materials = new Material[3];
+        materials[0] = terrainMaterial != null ? terrainMaterial : (meshRenderer.materials != null && meshRenderer.materials.Length > 0 ? meshRenderer.materials[0] : null);
+        materials[1] = roadMaterial != null ? roadMaterial : (meshRenderer.materials != null && meshRenderer.materials.Length > 1 ? meshRenderer.materials[1] : null);
+        materials[2] = townMaterial != null ? townMaterial : (meshRenderer.materials != null && meshRenderer.materials.Length > 2 ? meshRenderer.materials[2] : null);
+
+        if (materials[0] != null || materials[1] != null || materials[2] != null)
+        {
+            meshRenderer.materials = materials;
+        }
+    }
+
+    private void UpdateChunkPosition()
+    {
+        transform.position = new Vector3(Mathf.Floor(player.position.x), 0f, Mathf.Floor(player.position.z));
+    }
+
+    private float SampleHeight(float worldX, float worldZ)
+    {
+        float value = 0f;
+        float amplitude = 1f;
+        float frequency = 1f / scale;
+        float totalWeight = 0f;
+
+        for (int octave = 0; octave < octaves; octave++)
+        {
+            value += WorldNoise.Perlin2D(worldX, worldZ, terrainSeed, frequency) * amplitude;
+            totalWeight += amplitude;
+
+            amplitude *= persistence;
+            frequency *= lacunarity;
+        }
+
+        return (value / Mathf.Max(totalWeight, 0.0001f)) * heightMultiplier;
     }
 
     public void GenerateTerrain()
@@ -71,32 +121,40 @@ public class InfiniteTerrainSystem : MonoBehaviour
 
         Vector3[] vertices = new Vector3[totalVerts];
         Vector2[] uvs = new Vector2[totalVerts];
-        List<int> terrainTriangles = new List<int>();
+        List<int> terrainTriangles = new List<int>(width * depth * 6);
 
-        float halfWidthGrid = (width * spacing) * 0.5f;
-        float halfDepthGrid = (depth * spacing) * 0.5f;
+        float halfWidth = (width * spacing) * 0.5f;
+        float halfDepth = (depth * spacing) * 0.5f;
 
-        // Terrain system generates its own vertices and heights independently[cite: 9]
-        int vertIndex = 0;
+        int vertexIndex = 0;
         for (int z = 0; z < vertexRows; z++)
         {
             for (int x = 0; x < vertexCols; x++)
             {
-                float localX = (x * spacing) - halfWidthGrid;
-                float localZ = (z * spacing) - halfDepthGrid;
+                float localX = (x * spacing) - halfWidth;
+                float localZ = (z * spacing) - halfDepth;
 
                 float worldX = transform.position.x + localX;
                 float worldZ = transform.position.z + localZ;
 
-                float noiseY = Mathf.PerlinNoise(worldX / scale, worldZ / scale) * heightMultiplier;
+                float height = SampleHeight(worldX, worldZ);
+                if (roadSystem != null && roadSystem.enabled)
+                {
+                    float roadInfluence = roadSystem.GetRoadInfluence(worldX, worldZ);
+                    if (roadInfluence > 0f)
+                    {
+                        float roadSurface = roadSystem.GetRoadSurfaceHeight(worldX, worldZ);
+                        float slumpDepth = roadSystem.GetTerrainSlump(worldX, worldZ);
+                        height = Mathf.Min(height, roadSurface - slumpDepth);
+                    }
+                }
 
-                vertices[vertIndex] = new Vector3(localX, noiseY, localZ);
-                uvs[vertIndex] = new Vector2((float)x / width, (float)z / depth);
-                vertIndex++;
+                vertices[vertexIndex] = new Vector3(localX, height, localZ);
+                uvs[vertexIndex] = new Vector2((float)x / width, (float)z / depth);
+                vertexIndex++;
             }
         }
 
-        // Build terrain triangles, querying the road system only for culling boundaries
         for (int z = 0; z < depth; z++)
         {
             for (int x = 0; x < width; x++)
@@ -106,13 +164,8 @@ public class InfiniteTerrainSystem : MonoBehaviour
                 int i2 = z * vertexCols + (x + 1);
                 int i3 = (z + 1) * vertexCols + (x + 1);
 
-                float qWorldX = transform.position.x + ((x + 0.5f) * spacing) - halfWidthGrid;
-                float qWorldZ = transform.position.z + ((z + 0.5f) * spacing) - halfDepthGrid;
-
-                if (roadSystem != null && roadSystem.enabled && roadSystem.IsPointInTerrainCut(qWorldX, qWorldZ))
-                {
-                    continue; // Skip triangle generation inside road corridors
-                }
+                float sampleX = transform.position.x + ((x + 0.5f) * spacing) - halfWidth;
+                float sampleZ = transform.position.z + ((z + 0.5f) * spacing) - halfDepth;
 
                 terrainTriangles.Add(i0);
                 terrainTriangles.Add(i1);
@@ -132,12 +185,7 @@ public class InfiniteTerrainSystem : MonoBehaviour
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
 
-        // Hand off the terrain mesh data to the road system for submesh combination[cite: 8, 9]
-        if (roadSystem != null && roadSystem.enabled)
-        {
-            roadSystem.ProcessRoads(mesh, vertices, uvs, terrainTriangles);
-        }
-        else if (meshCollider != null)
+        if (meshCollider != null)
         {
             meshCollider.sharedMesh = null;
             meshCollider.sharedMesh = mesh;

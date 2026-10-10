@@ -1,188 +1,221 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(InfiniteTerrainSystem))]
+[RequireComponent(typeof(InfiniteTerrainSystem), typeof(TownSystem))]
 public class ProceduralRoadSystem : MonoBehaviour
 {
-    [Header("Highway Ribbon Settings")]
-    public bool enableRoad = true;
-    public float roadWidth = 14f;           // Main drivable road surface width[cite: 8]
-    public float shoulderWidth = 4f;        // How far the edges flare outwards[cite: 8]
-    public float terrainCullingWidth = 12f; // Tighter terrain cut so shoulders overlap[cite: 8]
+    [Header("References")]
+    public TownSystem townSystem;
 
-    [Header("Height Controls")]
-    public float roadHeightOffset = 0.3f;     // Adjusts road height only[cite: 8]
-    public float shoulderHeightOffset = 0.0f; // Adjusts shoulder height independently[cite: 8]
+    [Header("Material")]
+    public Material roadMaterial;
 
-    [Header("Grid & Waves")]
-    public float gridSpacing = 150f;          //[cite: 8]
-    public float wavesPerSegment = 1f;        //[cite: 8]
-    public float curveAmplitude = 25f;        //[cite: 8]
-    public float textureTiling = 0.15f;       //[cite: 8]
+    [Header("Road Surface")]
+    public bool enableRoad = false;
+    public float roadWidth = 9f;
+    public float shoulderAngle = 26f;
+    public float terrainCutWidth = 12f;
+    public float roadHeightOffset = 0.35f;
+    public float shoulderHeightOffset = 0f;
 
-    [Header("Ribbon Resolution")]
-    public int ribbonSegmentsPerChunk = 40;   //[cite: 8]
+    [Header("Road Network")]
+    public float roadSeed = 41.7f;
+
+    private struct Road
+    {
+        public Vector2 a, b;
+        public float width;
+    }
 
     private InfiniteTerrainSystem terrainSystem;
+    private MeshRenderer roadRenderer;
+    private readonly List<Road> roads = new List<Road>();
 
-    void Awake()
+    private void Awake()
     {
         terrainSystem = GetComponent<InfiniteTerrainSystem>();
+        roadRenderer = GetComponent<MeshRenderer>();
+        if (townSystem == null) townSystem = GetComponent<TownSystem>();
+        if (roadSeed <= 0f) roadSeed = WorldNoise.RandomSeed();
+        ApplyRoadMaterialOverride();
+        RefreshRoadNetwork();
     }
 
-    // Public query method allowing the terrain to check culling boundaries autonomously[cite: 8]
+    private void ApplyRoadMaterialOverride()
+    {
+        if (roadRenderer == null || roadMaterial == null) return;
+
+        Material[] materials = roadRenderer.materials;
+        if (materials == null || materials.Length <= 1)
+        {
+            materials = new Material[2];
+        }
+
+        materials[1] = roadMaterial;
+        roadRenderer.materials = materials;
+    }
+
+    public void RefreshRoadNetwork()
+    {
+        roads.Clear();
+        if (!enableRoad) return;
+
+        if (townSystem == null || !townSystem.HasTowns) return;
+
+        foreach (TownSystem.TownArea town in townSystem.Towns)
+        {
+            if (town.majorRoadPoints == null || town.majorRoadPoints.Count == 0) continue;
+            for (int i = 0; i < town.majorRoadPoints.Count; i++)
+            {
+                AddRoad(town.center, town.majorRoadPoints[i], 1.35f);
+                AddRoad(town.majorRoadPoints[i], town.majorRoadPoints[(i + 1) % town.majorRoadPoints.Count], 1.35f);
+                if (town.minorRoadPoints == null || town.minorRoadPoints.Count == 0) continue;
+                Vector2 m = town.minorRoadPoints[i % town.minorRoadPoints.Count];
+                Vector2 outward = m + (m - town.center).normalized * Mathf.Lerp(30f, 90f, WorldNoise.Hash01(i + 17f, roadSeed + 2.3f, roadSeed));
+                AddRoad(town.majorRoadPoints[i], m, 1f);
+                AddRoad(m, outward, 1f);
+            }
+        }
+
+        Vector2 origin = Vector2.zero;
+        int branchCount = Mathf.RoundToInt(Mathf.Lerp(4f, 7f, WorldNoise.Hash01(roadSeed, 11.7f, roadSeed)));
+        for (int i = 0; i < branchCount; i++)
+        {
+            float a = (i / (float)branchCount) * Mathf.PI * 2f + (WorldNoise.Hash01(i + 17f, roadSeed * 0.13f, roadSeed) - 0.5f) * 0.9f;
+            float len = Mathf.Lerp(60f, 160f, WorldNoise.Hash01(i * 3.3f + 7.9f, roadSeed + 9.4f, roadSeed));
+            AddRoad(origin, origin + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * len, 1f);
+        }
+    }
+
+    private void AddRoad(Vector2 from, Vector2 to, float scale)
+    {
+        roads.Add(new Road { a = from, b = to, width = roadWidth * scale + Mathf.Tan(shoulderAngle * Mathf.Deg2Rad) * (roadWidth * scale) });
+    }
+
+    private float DistanceToRoad(Vector2 p, out Vector2 closest)
+    {
+        float best = float.MaxValue;
+        closest = p;
+        foreach (Road road in roads)
+        {
+            Vector2 d = road.b - road.a;
+            float lenSq = d.sqrMagnitude;
+            float t = lenSq < 0.0001f ? 0f : Mathf.Clamp01(Vector2.Dot(p - road.a, d) / lenSq);
+            Vector2 cp = road.a + d * t;
+            float dist = (p - cp).magnitude;
+            if (dist < best)
+            {
+                best = dist;
+                closest = cp;
+            }
+        }
+        return best == float.MaxValue ? 0f : best;
+    }
+
+    private float EffectiveRoadRadius()
+    {
+        float shoulderRadius = (roadWidth * 0.5f) + Mathf.Tan(shoulderAngle * Mathf.Deg2Rad) * (roadWidth * 0.5f);
+        return Mathf.Max(shoulderRadius * 1.35f, terrainCutWidth * 0.9f);
+    }
+
+    public float GetRoadInfluence(float worldX, float worldZ)
+    {
+        if (!enableRoad || terrainSystem == null) return 0f;
+        float dist = DistanceToRoad(new Vector2(worldX, worldZ), out _);
+        if (dist <= 0f && roads.Count == 0) return 0f;
+        return Mathf.Clamp01(1f - Mathf.Clamp01(dist / EffectiveRoadRadius()));
+    }
+
+    public float GetRoadSurfaceHeight(float worldX, float worldZ)
+    {
+        if (!enableRoad || terrainSystem == null) return 0f;
+        Vector2 point = new Vector2(worldX, worldZ);
+        Vector2 closest;
+        DistanceToRoad(point, out closest);
+        float terrainHeight = WorldNoise.Perlin2D(closest.x, closest.y, terrainSystem.terrainSeed, 1f / terrainSystem.Scale) * terrainSystem.HeightMultiplier;
+        return terrainHeight + roadHeightOffset + shoulderHeightOffset;
+    }
+
+    public float GetTerrainSlump(float worldX, float worldZ)
+    {
+        float influence = GetRoadInfluence(worldX, worldZ);
+        return influence <= 0f ? 0f : Mathf.Lerp(0.6f, 5.5f, influence);
+    }
+
     public bool IsPointInTerrainCut(float worldX, float worldZ)
     {
-        float halfCulling = terrainCullingWidth * 0.5f;
-        float lockedCurveFreq = (2f * Mathf.PI * wavesPerSegment) / gridSpacing;
-
-        float nearestGridX = Mathf.Round(worldX / gridSpacing) * gridSpacing;
-        float nearestGridZ = Mathf.Round(worldZ / gridSpacing) * gridSpacing;
-
-        float targetRoadX = nearestGridX + Mathf.Sin(worldZ * lockedCurveFreq) * curveAmplitude;
-        float targetRoadZ = nearestGridZ + Mathf.Sin(worldX * lockedCurveFreq) * curveAmplitude;
-
-        float distRoadX = Mathf.Abs(worldX - targetRoadX);
-        float distRoadZ = Mathf.Abs(worldZ - targetRoadZ);
-        return Mathf.Min(distRoadX, distRoadZ) <= halfCulling;
+        if (!enableRoad || terrainSystem == null) return false;
+        float dist = DistanceToRoad(new Vector2(worldX, worldZ), out _);
+        float shoulderRadius = (roadWidth * 0.5f) + Mathf.Tan(shoulderAngle * Mathf.Deg2Rad) * (roadWidth * 0.5f);
+        return dist <= Mathf.Max(shoulderRadius, terrainCutWidth * 0.7f);
     }
 
-    // Generates road ribbons and combines them into the master mesh as Submesh 1[cite: 8]
     public void ProcessRoads(Mesh targetMesh, Vector3[] terrainVertices, Vector2[] terrainUvs, List<int> terrainTriangles)
     {
         if (terrainSystem == null) terrainSystem = GetComponent<InfiniteTerrainSystem>();
         if (!enableRoad || targetMesh == null) return;
 
-        int width = terrainSystem.Width;
-        int depth = terrainSystem.Depth;
+        RefreshRoadNetwork();
 
-        float halfRoad = roadWidth * 0.5f;
-        float halfTotal = halfRoad + shoulderWidth;
-
-        float chunkMinX = transform.position.x - ((width * terrainSystem.Spacing) * 0.5f);
-        float chunkMaxX = transform.position.x + ((width * terrainSystem.Spacing) * 0.5f);
-        float chunkMinZ = transform.position.z - ((depth * terrainSystem.Spacing) * 0.5f);
-        float chunkMaxZ = transform.position.z + ((depth * terrainSystem.Spacing) * 0.5f);
-
-        float lockedCurveFreq = (2f * Mathf.PI * wavesPerSegment) / gridSpacing;
+        int w = terrainSystem.Width;
+        int d = terrainSystem.Depth;
+        float minX = transform.position.x - (w * terrainSystem.Spacing * 0.5f);
+        float maxX = transform.position.x + (w * terrainSystem.Spacing * 0.5f);
+        float minZ = transform.position.z - (d * terrainSystem.Spacing * 0.5f);
+        float maxZ = transform.position.z + (d * terrainSystem.Spacing * 0.5f);
 
         List<Vector3> roadVertices = new List<Vector3>();
         List<Vector2> roadUvs = new List<Vector2>();
         List<int> roadTriangles = new List<int>();
 
-        float expansionMargin = curveAmplitude + halfTotal;
-        int minGridXIndex = Mathf.FloorToInt((chunkMinX - expansionMargin) / gridSpacing);
-        int maxGridXIndex = Mathf.CeilToInt((chunkMaxX + expansionMargin) / gridSpacing);
-        int minGridZIndex = Mathf.FloorToInt((chunkMinZ - expansionMargin) / gridSpacing);
-        int maxGridZIndex = Mathf.CeilToInt((chunkMaxZ + expansionMargin) / gridSpacing);
-
-        void GenerateRibbon(bool isZAligned, float baseCoord, float minBound, float maxBound)
+        foreach (Road road in roads)
         {
-            int startIndex = roadVertices.Count;
-            float segmentLen = (maxBound - minBound) / ribbonSegmentsPerChunk;
+            Vector3 a = new Vector3(road.a.x, 0f, road.a.y);
+            Vector3 b = new Vector3(road.b.x, 0f, road.b.y);
+            if ((a.x + road.width < minX && b.x + road.width < minX) || (a.x - road.width > maxX && b.x - road.width > maxX) ||
+                (a.z + road.width < minZ && b.z + road.width < minZ) || (a.z - road.width > maxZ && b.z - road.width > maxZ)) continue;
 
-            for (int i = 0; i <= ribbonSegmentsPerChunk; i++)
-            {
-                float tCoord = minBound + (i * segmentLen);
-                float roadCenterX, roadCenterZ;
-                float dxdz_or_dzdx;
+            Vector3 tangent = (b - a).sqrMagnitude > 0.0001f ? (b - a).normalized : Vector3.forward;
+            Vector3 right = Vector3.Cross(Vector3.up, tangent).normalized;
+            float h = road.width * 0.5f;
+            Vector3 aL = a - right * h, aR = a + right * h, bL = b - right * h, bR = b + right * h;
+            aL.y = aR.y = GetRoadSurfaceHeight(a.x, a.z);
+            bL.y = bR.y = GetRoadSurfaceHeight(b.x, b.z);
 
-                if (isZAligned)
-                {
-                    roadCenterX = baseCoord + Mathf.Sin(tCoord * lockedCurveFreq) * curveAmplitude;
-                    roadCenterZ = tCoord;
-                    dxdz_or_dzdx = curveAmplitude * lockedCurveFreq * Mathf.Cos(tCoord * lockedCurveFreq);
-                }
-                else
-                {
-                    roadCenterX = tCoord;
-                    roadCenterZ = baseCoord + Mathf.Sin(tCoord * lockedCurveFreq) * curveAmplitude;
-                    dxdz_or_dzdx = curveAmplitude * lockedCurveFreq * Mathf.Cos(tCoord * lockedCurveFreq);
-                }
+            roadVertices.Add(aL - transform.position);
+            roadVertices.Add(aR - transform.position);
+            roadVertices.Add(bL - transform.position);
+            roadVertices.Add(bR - transform.position);
 
-                Vector3 tangent = isZAligned ? new Vector3(dxdz_or_dzdx, 0f, 1f).normalized : new Vector3(1f, 0f, dxdz_or_dzdx).normalized;
-                Vector3 right = Vector3.Cross(Vector3.up, tangent).normalized;
-
-                float baseTerrainY = Mathf.PerlinNoise(roadCenterX / terrainSystem.scale, roadCenterZ / terrainSystem.scale) * terrainSystem.heightMultiplier;
-                float roadY = baseTerrainY + roadHeightOffset;
-
-                Vector3 leftTotalPos = new Vector3(roadCenterX, 0f, roadCenterZ) - right * halfTotal;
-                Vector3 rightTotalPos = new Vector3(roadCenterX, 0f, roadCenterZ) + right * halfTotal;
-
-                float leftTerrainY = Mathf.PerlinNoise(leftTotalPos.x / terrainSystem.scale, leftTotalPos.z / terrainSystem.scale) * terrainSystem.heightMultiplier + shoulderHeightOffset;
-                float rightTerrainY = Mathf.PerlinNoise(rightTotalPos.x / terrainSystem.scale, rightTotalPos.z / terrainSystem.scale) * terrainSystem.heightMultiplier + shoulderHeightOffset;
-
-                Vector3 pLeftTotal = new Vector3(leftTotalPos.x - transform.position.x, leftTerrainY, leftTotalPos.z - transform.position.z);
-                Vector3 pLeftRoad = new Vector3(roadCenterX - transform.position.x, roadY, roadCenterZ - transform.position.z) - right * halfRoad;
-                Vector3 pRightRoad = new Vector3(roadCenterX - transform.position.x, roadY, roadCenterZ - transform.position.z) + right * halfRoad;
-                Vector3 pRightTotal = new Vector3(rightTotalPos.x - transform.position.x, rightTerrainY, rightTotalPos.z - transform.position.z);
-
-                roadVertices.Add(pLeftTotal);
-                roadVertices.Add(pLeftRoad);
-                roadVertices.Add(pRightRoad);
-                roadVertices.Add(pRightTotal);
-
-                float texCoord = tCoord * textureTiling;
-                roadUvs.Add(new Vector2(0.0f, texCoord));
-                roadUvs.Add(new Vector2(0.2f, texCoord));
-                roadUvs.Add(new Vector2(0.8f, texCoord));
-                roadUvs.Add(new Vector2(1.0f, texCoord));
-            }
-
-            for (int i = 0; i < ribbonSegmentsPerChunk; i++)
-            {
-                int b = startIndex + (i * 4);
-                int n = b + 4;
-
-                roadTriangles.Add(b); roadTriangles.Add(n); roadTriangles.Add(b + 1);
-                roadTriangles.Add(n); roadTriangles.Add(n + 1); roadTriangles.Add(b + 1);
-
-                roadTriangles.Add(b + 1); roadTriangles.Add(n + 1); roadTriangles.Add(b + 2);
-                roadTriangles.Add(n + 1); roadTriangles.Add(n + 2); roadTriangles.Add(b + 2);
-
-                roadTriangles.Add(b + 2); roadTriangles.Add(n + 2); roadTriangles.Add(b + 3);
-                roadTriangles.Add(n + 2); roadTriangles.Add(n + 3); roadTriangles.Add(b + 3);
-            }
+            int start = roadVertices.Count - 4;
+            roadTriangles.Add(start); roadTriangles.Add(start + 2); roadTriangles.Add(start + 1);
+            roadTriangles.Add(start + 2); roadTriangles.Add(start + 3); roadTriangles.Add(start + 1);
+            roadUvs.Add(new Vector2(0f, 0f)); roadUvs.Add(new Vector2(1f, 0f));
+            roadUvs.Add(new Vector2(0f, 1f)); roadUvs.Add(new Vector2(1f, 1f));
         }
 
-        for (int gX = minGridXIndex; gX <= maxGridXIndex; gX++)
-        {
-            GenerateRibbon(true, gX * gridSpacing, chunkMinZ, chunkMaxZ);
-        }
+        if (roadVertices.Count == 0) return;
 
-        for (int gZ = minGridZIndex; gZ <= maxGridZIndex; gZ++)
-        {
-            GenerateRibbon(false, gZ * gridSpacing, chunkMinX, chunkMaxX);
-        }
-
-        // Combine terrain and road datasets into the final multi-submesh structure[cite: 8, 9]
-        List<Vector3> finalVertices = new List<Vector3>(terrainVertices);
-        int terrainVertCount = terrainVertices.Length; // Fixed from .Count to .Length[cite: 8]
-        finalVertices.AddRange(roadVertices);
-
-        List<Vector2> finalUvs = new List<Vector2>(terrainUvs);
-        finalUvs.AddRange(roadUvs);
-
-        List<int> finalRoadTriangles = new List<int>(roadTriangles.Count);
-        for (int i = 0; i < roadTriangles.Count; i++)
-        {
-            finalRoadTriangles.Add(roadTriangles[i] + terrainVertCount);
-        }
+        List<Vector3> finalVertices = new List<Vector3>(terrainVertices); finalVertices.AddRange(roadVertices);
+        List<Vector2> finalUvs = new List<Vector2>(terrainUvs); finalUvs.AddRange(roadUvs);
+        List<int> finalTriangles = new List<int>(roadTriangles.Count);
+        int offset = terrainVertices.Length;
+        for (int i = 0; i < roadTriangles.Count; i++) finalTriangles.Add(roadTriangles[i] + offset);
 
         targetMesh.Clear();
         targetMesh.subMeshCount = 2;
         targetMesh.SetVertices(finalVertices);
         targetMesh.SetUVs(0, finalUvs);
         targetMesh.SetTriangles(terrainTriangles, 0);
-        targetMesh.SetTriangles(finalRoadTriangles, 1);
+        targetMesh.SetTriangles(finalTriangles, 1);
         targetMesh.RecalculateNormals();
         targetMesh.RecalculateBounds();
 
-        MeshCollider meshCollider = GetComponent<MeshCollider>();
-        if (meshCollider != null)
+        MeshCollider collider = GetComponent<MeshCollider>();
+        if (collider != null)
         {
-            meshCollider.sharedMesh = null;
-            meshCollider.sharedMesh = targetMesh;
+            collider.sharedMesh = null;
+            collider.sharedMesh = targetMesh;
         }
     }
 }
